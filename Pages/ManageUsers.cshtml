@@ -1,0 +1,11 @@
+﻿@page
+@model IISprojekt3.Pages.ManageUsersModel
+@{
+    ViewData["Title"] = "Správa uživatelů";
+}
+
+<component type="typeof(IISprojekt3.Components.ManageUsersComponent)" render-mode="Server" />
+
+@section Scripts {
+    <script src="~/_framework/blazor.server.js"></script>
+}

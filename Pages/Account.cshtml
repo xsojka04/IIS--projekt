@@ -1,0 +1,49 @@
+﻿@page
+@using IISprojekt3.Models.Enums;
+@using System.Security.Claims;
+@model IISprojekt3.Pages.AccountModel
+@{
+    ViewData["Title"] = "Účet";
+}
+
+<div>
+    <h1>Informace o uživateli</h1>
+    <b>Jméno:</b> @User.Identity.Name<br>
+    <b>Role:</b>
+    @foreach (var role in Enum.GetNames(typeof(EUserType)))
+    {
+        if (role.ToUpper().Equals(User.FindFirst(ClaimTypes.Role)?.Value))
+        {
+            @:@role
+        }
+    }
+    <br>
+</div>
+<br>
+
+<form class="col-md-4 jumbotron" method="post">
+    <h4>Změna jména</h4>
+    @if (ViewData["NameError"] != null)
+    {
+        <div class="alert alert-danger">@ViewData["NameError"]</div>
+    }
+    else if (ViewData["NameInfo"] != null)
+    {
+        <div class="alert alert-success">@ViewData["NameInfo"]</div>
+    }
+    <div class="form-group">
+        <label>Nové jméno</label>
+        <input class="form-control" asp-for="Name" />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Změnit</button>
+
+</form>
+
+<br>
+
+<component type="typeof(IISprojekt3.Components.ChangePasswordComponent)" render-mode="Server" />
+
+@section Scripts {
+    <script src="~/_framework/blazor.server.js"></script>
+}

@@ -1,0 +1,13 @@
+﻿@page
+@using IISprojekt3.Helpers;
+@model IISprojekt3.Pages.TestSearch
+@{
+    ViewData["Title"] = "Vyhledávání testů";
+}
+
+<component type="typeof(IISprojekt3.Components.TestSearchComponent)" render-mode="Server" />
+
+@section Scripts {
+    <script src="~/_framework/blazor.server.js"></script>
+}
+

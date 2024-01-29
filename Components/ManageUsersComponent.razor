@@ -1,0 +1,212 @@
+﻿@using IISprojekt3.Data.IisDbContext;
+@using IISprojekt3.Models;
+@using IISprojekt3.Helpers;
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IISprojekt3.Data.IisDbContext.IisdbContext IisdbContext
+
+<h1>Uživatelé</h1>
+@if (IsLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <EditForm class="jumbotron" Model="@addUserModel" OnSubmit="@AddUser">
+        <h4>
+            Přidat uživatele
+        </h4>
+        @if (AddError != null)
+        {
+            <div class="alert alert-danger">@AddError</div>
+        }
+        else if (AddInfo != null)
+        {
+            <div class="alert alert-success">@AddInfo</div>
+        }
+        <div class="form-row">
+            <div class="col">
+                <InputText placeholder="Jméno" class="form-control" @bind-Value="addUserModel.Name" />
+            </div>
+
+            <div class="col">
+                <InputText type="password" placeholder="Heslo" class="form-control" @bind-Value="addUserModel.Password" />
+            </div>
+
+            <div class="col">
+                <InputSelect class="form-control" @bind-Value="addUserModel.UserType">
+                    @foreach (var userType in Enum.GetValues(typeof(EUserType)))
+                        {
+                        <option value="@userType">@userType</option>
+                        }
+                </InputSelect>
+            </div>
+            <div class="col text-center">
+                <button type="submit" class="btn btn-primary">Přidat</button>
+            </div>
+        </div>
+    </EditForm>
+
+    @if (ListError != null)
+    {
+        <div class="alert alert-danger">@ListError</div>
+    }
+    else if (ListInfo != null)
+    {
+        <div class="alert alert-success">@ListInfo</div>
+    }
+
+    if (Users.Count == 0)
+    {
+        <p>
+            <b>Seznam je prázdný</b>
+        </p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>
+                        Jméno
+                    </th>
+                    <th>
+                        Role
+                    </th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in Users)
+                {
+                    <tr>
+                        <td>
+                            @user.Name
+                        </td>
+                        <td>
+                            @Enum.GetName(typeof(EUserType), user.UserType)
+                        </td>
+                        <td class="text-center">
+                            <a href="/EditUser?UserId=@user.Id">Úprava</a>
+                            <a href="" @onclick="() => DeleteUser(user)" @onclick:preventDefault>Smazat</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+    @code {
+      private AddUserModel addUserModel = new AddUserModel();
+
+      private List<User> Users = new List<User>();
+      private string AddError { get; set; }
+      private string ListError { get; set; }
+      private string AddInfo { get; set; }
+      private string ListInfo { get; set; }
+      private bool IsLoading = true;
+
+      protected override async Task OnInitializedAsync()
+      {
+          await Task.Run(() => ActualizeUsers());
+      }
+
+      private void DeleteUser(User user)
+      {
+          try
+          {
+              IisdbContext.User.Remove(user);
+              IisdbContext.SaveChanges();
+              ActualizeUsers();
+              ListInfo = $"Uživatel {user.Name} byl odstraněn";
+          }
+          catch
+          {
+              ListError = "Uživatele se nepodařilo odstranit";
+          }
+      }
+
+      private void AddUser()
+      {
+          if (string.IsNullOrEmpty(addUserModel.Name))
+          {
+              AddError = "Jméno není vyplněno";
+          }
+
+          if (string.IsNullOrEmpty(addUserModel.Password))
+          {
+              AddError = "Heslo není vyplněno";
+          }
+
+          var authorId = GetUserId().ConfigureAwait(false).GetAwaiter().GetResult();
+          if (authorId is null)
+          {
+              AddError = "Heslo se nepodařilo změnit";
+              return;
+          }
+          if (IisdbContext.User.FirstOrDefault(x => x.Name == addUserModel.Name) != null)
+          {
+              AddError = $"Jméno {addUserModel.Name} je již zabrané";
+              return;
+          }
+
+          IisdbContext.User.Add(addUserModel.ToUser(authorId.Value));
+          IisdbContext.SaveChanges();
+          addUserModel = new AddUserModel();
+          AddInfo = $"Uživatel {addUserModel.Name} byl vytvořen";
+          ActualizeUsers(authorId);
+      }
+
+      private async Task<int?> GetUserId()
+      {
+          var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+          var user = authState.User;
+
+          if (user.Identity.IsAuthenticated)
+          {
+              return int.Parse(user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value);
+          }
+          return null;
+      }
+
+      private async Task<EUserType> GetUserRole()
+      {
+          var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+          var user = authState.User;
+
+          if (user.Identity.IsAuthenticated)
+          {
+              switch (user.FindFirst(c => c.Type == ClaimTypes.Role)?.Value)
+              {
+                  case "ADMIN":
+                      return EUserType.Admin;
+                  case "PROFESOR":
+                      return EUserType.Profesor;
+                  case "ASISTENT":
+                      return EUserType.Asistent;
+                  case "STUDENT":
+                      return EUserType.Student;
+                  default:
+                      throw (new Exception("Neznámá role uživatele"));
+              }
+          }
+          throw (new Exception("Neoprávněný přístup"));
+      }
+
+      private void ActualizeUsers(int? userId = null)
+      {
+          if (userId is null)
+              userId = GetUserId().ConfigureAwait(false).GetAwaiter().GetResult();
+
+          var userRole = GetUserRole().ConfigureAwait(false).GetAwaiter().GetResult();
+          var users = IisdbContext.User.Where(x => x.Id != userId && x.UserType >= (int)userRole).ToList();
+          Users = users;
+          IsLoading = false;
+      }
+    }

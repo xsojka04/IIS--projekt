@@ -1,0 +1,110 @@
+﻿@page
+@using IISprojekt3.Models.Enums;
+@model IISprojekt3.Pages.TestDetailModel
+@{
+    ViewData["Title"] = "Detail testu";
+}
+
+<div class="jumbotron">
+    <h1>@Model.Test.IdAssignmentNavigation.Name</h1>
+    <p><b>Začátek:</b> @Model.Test.IdAssignmentNavigation.Beginning</p>
+    <p><b>Délka trvání(min):</b> @Model.Test.IdAssignmentNavigation.Duration</p>
+    <p><b>Popis:</b> @Model.Test.IdAssignmentNavigation.Description</p>
+    <p><b>Počet otázek:</b> @Model.QuestionsCount()</p>
+    <p><b>Maximální skóre:</b> @Model.MaxScore()</p>
+
+    @if (Model.IsStartTest())
+    {
+        <a class="btn btn-primary" href="@($"/Test?TestId={Model.TestId}")">Vyplnit test</a>
+    }
+
+    @if (Model.IsContinueTest())
+    {
+        <a class="btn btn-primary" href="@($"/Test?TestId={Model.TestId}")">Pokračovat v testu</a>
+    }
+
+
+    @if (Model.Test.State == (int)ETestState.Error)
+    {
+        <div class="bg-light m-2 p-2 rounded">
+            <p><b>Něco se pokazilo</b></p>
+        </div>
+    }
+
+    @if (Model.Test.State == (int)ETestState.Vyplneno)
+    {
+        <div class="bg-light m-2 p-2 rounded">
+            <p><b>Test čeká na ohodnocení</b></p>
+        </div>
+    }
+
+    @if (await Model.IsEvaluatedAsync())
+    {
+        <div class="bg-light m-2 p-2 rounded">
+            <p><b>Známka:</b> @Model.Test.Evaluation</p>
+            <p><b>Body:</b> @Model.Test.Score</p>
+            <p><b>Hodnocení:</b> @Model.Test.EvaluationText</p>
+            <p><b>Ohodnotil:</b> @Model.Test.EvaluatedByNavigation.Name</p>
+            <br>
+            <br>
+            <ul class="list-group">
+                @foreach (var answer in Model.EvaluatedAnswers)
+                {
+                    <li class="list-group-item">
+                        @if (answer.IdQuestionNavigation.Text != null)
+                        {
+                            <p><b>Text otázky:</b> @answer.IdQuestionNavigation.Text</p>
+                        }
+
+                        @if (answer.IdQuestionNavigation.Image != null)
+                        {
+                            <img src="@answer.IdQuestionNavigation.Image" />
+                        }
+
+                        <br>
+
+                        <p>
+                            <b>Odpověď: </b>
+                            @if (answer.IdQuestionNavigation.AnswerType == (int)EAnswerType.Text)
+                            {
+                                @answer.Text
+                            }
+
+                            @if (answer.IdQuestionNavigation.AnswerType == (int)EAnswerType.OneWord)
+                            {
+                                @answer.Text
+                            }
+
+                            @if (answer.IdQuestionNavigation.AnswerType == (int)EAnswerType.Number)
+                            {
+                                @answer.Number
+                            }
+
+                            @if (answer.IdQuestionNavigation.AnswerType == (int)EAnswerType.BoolValue)
+                            {
+                                @(Convert.ToBoolean(answer.Bool) ? "Ano" : "Ne")
+                            }
+
+                        </p>
+                        <p><b>Maximální počet bodů:</b> @answer.IdQuestionNavigation.IdQuestionGroupNavigation.Score</p>
+                        <p><b>Hodnocení:</b> @answer.EvaluationText</p>
+                        <p><b>Získané body:</b> @answer.Score</p>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+    @if (Model.Test.State == (int)ETestState.Odmitnuto)
+    {
+        <div class="bg-light m-2 p-2 rounded">
+            <p><b>Vaše žádost o test byla odmnítnuta</b></p>
+        </div>
+    }
+
+    @if (Model.IsBeforeTest())
+    {
+        <div class="bg-light m-2 p-2 rounded">
+            <p><b>Test bude dostupný až @Model.Test.IdAssignmentNavigation.Beginning</b></p>
+        </div>
+    }
+</div>

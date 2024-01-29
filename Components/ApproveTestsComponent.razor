@@ -1,0 +1,143 @@
+﻿@using IISprojekt3.Data.IisDbContext;
+@using IISprojekt3.Models.Enums;
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IISprojekt3.Data.IisDbContext.IisdbContext IisdbContext
+
+<h1>Žádosti studentů</h1>
+
+@if (IsLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    if (Tests.Count == 0)
+    {
+        <p>
+            <b>Seznam je prázdný</b>
+        </p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>
+                        Jméno
+                    </th>
+                    <th>
+                        Datum
+                    </th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var test in Tests)
+                {
+                    <tr>
+                        <td>
+                            @test.IdAssignmentNavigation.Name
+                        </td>
+                        <td>
+                            @test.AuthorNavigation.Name
+                        </td>
+                        <td>
+                            <a href="" @onclick="() => Approve(test)" @onclick:preventDefault>Přijmout</a>
+                            <a href="" @onclick="() => Decline(test)" @onclick:preventDefault>Zamítnout</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+
+    @code {
+      private List<Test> Tests = new List<Test>();
+      private bool IsLoading = true;
+
+      protected override async Task OnInitializedAsync()
+      {
+          await Task.Run(() => LoadTestsAsync());
+      }
+
+      private async Task LoadTestsAsync()
+      {
+          var userId = await GetUserId();
+          var user = IisdbContext.User.FirstOrDefault(x => x.Id == userId);
+          var tests = IisdbContext.Test.Where(x => x.State == (int)ETestState.Zazadano).ToList();
+          var users = IisdbContext.User.ToList();
+          var assignments = IisdbContext.Assignment.ToList();
+
+          foreach (var test in tests)
+          {
+              test.AuthorNavigation = users.FirstOrDefault(x => x.Id == test.Author);
+              test.IdAssignmentNavigation = assignments.FirstOrDefault(x => x.Id == test.IdAssignment);
+          }
+
+          if (user.UserType == (int)EUserType.Asistent)
+          {
+              var asignmentsForAssistent = IisdbContext.BindAsistentAssignment.Where(x => x.IdAsistent == userId && x.IsApproved == 1 && x.ApprovedBy != null).ToList();
+              List<int> asignmentsId = new List<int>();
+              foreach (var asignmentForAssistent in asignmentsForAssistent)
+              {
+                  asignmentsId.Add(asignmentForAssistent.IdAssignment);
+              }
+
+              foreach (var test in tests)
+              {
+                  if (asignmentsId.Contains(test.IdAssignment))
+                  {
+                      Tests.Add(test);
+                  }
+              }
+          }
+          else
+          {
+              foreach (var test in tests)
+              {
+                  if (test.IdAssignmentNavigation.Author == userId)
+                  {
+                      Tests.Add(test);
+                  }
+              }
+          }
+
+          IsLoading = false;
+      }
+
+      private async Task<int> GetUserId()
+      {
+          var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+          var user = authState.User;
+
+          if (user.Identity.IsAuthenticated)
+          {
+              return int.Parse(user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value);
+          }
+          throw new Exception("Uživatel není přihlášený");
+      }
+
+      private void Approve(Test test)
+      {
+          test.State = (int)ETestState.Schvaleno;
+          IisdbContext.Test.Update(test);
+          IisdbContext.SaveChanges();
+          NavManager.NavigateTo("/", true);
+      }
+
+      private void Decline(Test test)
+      {
+          test.State = (int)ETestState.Odmitnuto;
+          IisdbContext.Test.Update(test);
+          IisdbContext.SaveChanges();
+          NavManager.NavigateTo("/", true);
+      }
+    }

@@ -1,0 +1,176 @@
+﻿@using IISprojekt3.Models.Enums;
+@using IISprojekt3.Models;
+@using IISprojekt3.Data.IisDbContext;
+@using System.Text.RegularExpressions;
+
+@inject IISprojekt3.Data.IisDbContext.IisdbContext IisdbContext;
+@inject IJSRuntime JS;
+@inject NavigationManager NavManager
+
+@if (IsLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="jumbotron">
+        <h3 id="top">@Assignment.Name</h3>
+        @if (Error != null)
+        {
+            <div class="alert alert-danger">@Error</div>
+        }
+        <ul class="list-group">
+            @foreach (var answer in AnswerModels)
+            {
+                <li class="list-group-item @(answer.IsSaved ? "list-group-item-primary" : "list-group-item-warning")">
+                    <p><b>Maximální počet bodů za otázku: </b>@answer.MaxScore</p>
+                    <div class="text-center">
+                        @if (answer.QuestionText != null)
+                        {
+                            <div class="p-2"><b>Otázka: </b>@answer.QuestionText</div>
+                        }
+
+                        @if (answer.QuestionImage != null)
+                        {
+                            <img class="p-2" src="@answer.QuestionImage" />
+                        }
+
+                        <EditForm class="form-group p-2" Model="@answer" OnSubmit="() => SaveAnswer(answer)">
+                            @switch (answer.AnswerType)
+                            {
+                                case EAnswerType.BoolValue:
+                                    <a href="" class="@answer.YesBoolClass" @onclick="() => answer.SetBool(true)" @onclick:preventDefault>Ano</a>
+                                    <a href="" class="@answer.NoBoolClass" @onclick="() => answer.SetBool(false)" @onclick:preventDefault>Ne</a>
+                                    break;
+                                case EAnswerType.Number:
+                                    <div>
+                                        <InputNumber class="form-control" placeholder="Číselná hodnota" @bind-Value="answer.Number" />
+                                    </div>
+                                    break;
+                                case EAnswerType.OneWord:
+                                    <div>
+                                        <input class="form-control" type="text" maxlength="150" pattern="^\S*$" placeholder="Jednoslovná odpověď" @onchange="((e) => HandleOneWordChange(e, answer))" value="@answer.Text" />
+                                    </div>
+                                    break;
+                                case EAnswerType.Text:
+                                    <div>
+                                        <InputText class="form-control" placeholder="Odpověď" @bind-Value="answer.Text" />
+                                    </div>
+                                    break;
+                            }
+
+                            <div class="p-2">
+                                <button class="btn btn-primary" type="submit">Uložit odpověď</button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </li>
+            }
+        </ul>
+        <div class="p-4">
+            <a href="" class="btn btn-primary" @onclick="EndTesting" @onclick:preventDefault>Ukončit test</a>
+        </div>
+    </div>
+}
+
+@code
+{
+  [Parameter]
+  public int TestId { get; set; }
+  public Test Test { get; set; }
+  public Assignment Assignment { get; set; }
+  public List<QuestionGroup> QuestionGroups { get; set; }
+  public List<Question> Questions { get; set; }
+  public List<AnswerModel> AnswerModels { get; set; }
+  public string Error { get; set; }
+  private bool IsLoading = true;
+
+  protected override async Task OnInitializedAsync()
+  {
+      await Task.Run(() => GetData());
+      await base.OnInitializedAsync();
+  }
+
+  public void GetData()
+  {
+      Test = IisdbContext.Test.FirstOrDefault(x => x.Id == TestId);
+      Assignment = IisdbContext.Assignment.FirstOrDefault(x => x.Id == Test.IdAssignment);
+      QuestionGroups = IisdbContext.QuestionGroup.Where(x => x.IdAssingment == Test.IdAssignment).ToList();
+      var answers = IisdbContext.Answer.Where(x => x.IdTest == TestId).ToList();
+      Questions = new List<Question>();
+      foreach (var answer in answers)
+      {
+          Questions.Add(IisdbContext.Question.FirstOrDefault(x => x.Id == answer.IdQuestion));
+      }
+      AnswerModels = answers.Select(x => new AnswerModel(x, GetScore(x))).ToList();
+      IsLoading = false;
+  }
+
+  public void HandleOneWordChange(ChangeEventArgs e, AnswerModel answer)
+  {
+      answer.Text = e.Value.ToString();
+  }
+
+  public float GetScore(Answer answer)
+  {
+      return QuestionGroups.FirstOrDefault(x => x.Id == Questions.FirstOrDefault(x => x.Id == answer.IdQuestion).IdQuestionGroup).Score;
+  }
+
+  public void SaveAnswer(AnswerModel answerModel)
+  {
+      if (IsPastTest())
+      {
+          EndTest();
+      }
+      else
+      {
+          var answer = IisdbContext.Answer.FirstOrDefault(x => x.Id == answerModel.Id);
+          answerModel.UpdateAnswer(answer);
+          IisdbContext.Answer.Update(answer);
+          IisdbContext.SaveChanges();
+          answerModel.SetIsSaved(true);
+      }
+  }
+
+  public void EndTesting()
+  {
+      if (IsPastTest())
+      {
+          EndTest();
+      }
+      else if (AnswerModels.Any(x => x.IsSaved == false))
+      {
+          ScrollToTopAsync();
+          Error = "Nejsou vyplněny všechny otázky";
+      }
+      else
+      {
+          EndTest();
+      }
+  }
+
+  private void EndTest()
+  {
+      Test.End = DateTime.Now;
+      Test.State = (int)ETestState.Vyplneno;
+      IisdbContext.Test.Update(Test);
+      IisdbContext.SaveChanges();
+      NavManager.NavigateTo("/", true);
+  }
+
+  private void ScrollToTopAsync()
+  {
+      JS.InvokeVoidAsync("window.scrollTo", 0, 0).ConfigureAwait(false);
+  }
+
+  private bool IsPastTest()
+  {
+      if (Assignment.Beginning.AddMinutes(Assignment.Duration) < DateTime.Now)
+          return true;
+      return false;
+  }
+}

@@ -1,0 +1,102 @@
+﻿@using IISprojekt3.Data.IisDbContext;
+@using IISprojekt3.Models.Enums;
+@using IISprojekt3.Helpers;
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IISprojekt3.Data.IisDbContext.IisdbContext IisdbContext
+
+<h1>Testy pro asistenta</h1>
+
+@if (IsLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    if (Assignments.Count == 0)
+    {
+        <p>
+            <b>Seznam je prázdný</b>
+        </p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>
+                        Jméno
+                    </th>
+                    <th>
+                        Stav
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var assignment in Assignments)
+                {
+                    <tr>
+                        <td>
+                            @assignment.Name
+                        </td>
+                        <td>
+                            @(StateToString(assignment.BindAsistentAssignment.First()))
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+
+@code {
+    private List<Assignment> Assignments = new List<Assignment>();
+    private bool IsLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.Run(() => LoadAssignmentsAsync());
+    }
+
+
+    private async Task LoadAssignmentsAsync()
+    {
+        var userId = GetUserId();
+        Assignments = IisdbContext.Assignment.ToList();
+        var binded = IisdbContext.BindAsistentAssignment.Where(x => x.IdAsistent == userId).ToList();
+        Assignments = Assignments.Where(x => binded.Any(z => z.IdAssignment == x.Id)).ToList();
+        foreach (var assignment in Assignments)
+        {
+            assignment.BindAsistentAssignment = new List<BindAsistentAssignment>() { binded.First(x => x.IdAssignment == assignment.Id) };
+        }
+        IsLoading = false;
+    }
+
+    private int GetUserId()
+    {
+        var authState = AuthenticationStateProvider.GetAuthenticationStateAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+        var user = authState.User;
+
+        if (user.Identity.IsAuthenticated)
+        {
+            return int.Parse(user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value);
+        }
+        throw new Exception("Uživatel není přihlášený");
+    }
+
+    public string StateToString(BindAsistentAssignment bind)
+    {
+        if (bind.ApprovedBy is null)
+            return "Nevyřízeno";
+        else if (bind.IsApproved == 0)
+            return "Odmítnuto";
+        else
+            return "Schváleno";
+    }
+}

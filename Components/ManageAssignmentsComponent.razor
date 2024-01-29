@@ -1,0 +1,128 @@
+﻿@using IISprojekt3.Data.IisDbContext;
+@using IISprojekt3.Models;
+@using IISprojekt3.Helpers;
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IISprojekt3.Data.IisDbContext.IisdbContext IisdbContext
+@inject NavigationManager NavManager
+
+<h1>Správa zkoušek</h1>
+@if (this.IsLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <a class="btn btn-primary" href="CreateAssigment">Přidat zkoušku</a>
+
+    <br>
+    <br>
+
+    @if (ListError != null)
+    {
+        <div class="alert alert-danger">@ListError</div>
+    }
+    else if (ListInfo != null)
+    {
+        <div class="alert alert-success">@ListInfo</div>
+    }
+
+    if (Assignments.Count == 0)
+    {
+        <p>
+            <b>Seznam je prázdný</b>
+        </p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>
+                        Jméno
+                    </th>
+                    <th>
+                        Autor
+                    </th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var assignment in Assignments)
+                {
+                    <tr>
+                        <td>
+                            @assignment.Name
+                        </td>
+                        <td>
+                            @IisdbContext.User.FirstOrDefault(x => x.Id == assignment.Author).Name
+                        </td>
+                        <td>
+                            <a href="" @onclick="() => UpdateAssignment(assignment)" @onclick:preventDefault>Úprava</a>
+                            <a href="" @onclick="() => ShowUsers(assignment)" @onclick:preventDefault>Uživatelé</a>
+                            <a href="" @onclick="() => DeleteAssigment(assignment)" @onclick:preventDefault>Smazat</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code
+{
+    private List<Assignment> Assignments = new List<Assignment>();
+    private string ListError { get; set; }
+    private string ListInfo { get; set; }
+    private bool IsLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.Run(() => ActualizeTests());
+    }
+
+    private void ActualizeTests()
+    {
+        var assignment = IisdbContext.Assignment.ToList();
+        Assignments = assignment;
+        IsLoading = false;
+    }
+
+    private void UpdateAssignment(Assignment assignment)
+    {
+        if (DateTime.Now > assignment.Beginning)
+        {
+            ListError = "Test nelze upravit po jeho začátku";
+        }
+        else
+        {
+            NavManager.NavigateTo("/EditAssignment?AssignmentId=" + assignment.Id, true);
+        }
+    }
+
+    private void ShowUsers(Assignment assignment)
+    {
+        NavManager.NavigateTo("/AssignmentUsers?AssignmentId=" + assignment.Id, true);
+    }
+
+    private void DeleteAssigment(Assignment assignment)
+    {
+        try
+        {
+            IisdbContext.Assignment.Remove(assignment);
+            IisdbContext.SaveChanges();
+            ActualizeTests();
+            ListInfo = $"Test {assignment.Name} byl odstraněn";
+        }
+        catch
+        {
+            ListError = "Test se nepodařilo odstranit";
+        }
+    }
+}
+

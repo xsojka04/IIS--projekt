@@ -1,0 +1,12 @@
+﻿@page
+@model IISprojekt3.Pages.EditAssignmentModel
+@using IISprojekt3.Models.Enums
+@{
+    ViewData["Title"] = "Úprava testu";
+}
+
+<component type="typeof(IISprojekt3.Components.EditAssignmentComponent)" param-AssignmentId="Model.AssignmentId" render-mode="Server" />
+
+@section Scripts {
+    <script src="~/_framework/blazor.server.js"></script>
+}

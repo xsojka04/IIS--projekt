@@ -1,0 +1,391 @@
+﻿@using IISprojekt3.Data.IisDbContext;
+@using IISprojekt3.Models;
+@using IISprojekt3.Helpers;
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Http
+@using System.IO
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IJSRuntime JS;
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IISprojekt3.Data.IisDbContext.IisdbContext IisdbContext
+
+@if (GroupModel != null)
+{
+    <div class="modal @ModalClass" id="modalbox" tabindex="-1" role="dialog" style="display:@ModalDisplay">
+        <div class="modal-dialog modal-dialog-scrollable" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Skupina otázek</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close" @onclick="() => HideDetail()">
+                    </button>
+                </div>
+                <div class="modal-body">
+                    @if (GroupModel.Error != null)
+                    {
+                        <div class="alert alert-danger">@GroupModel.Error</div>
+                    }
+                    <EditForm id="questionGroup" Model="@GroupModel" OnSubmit="@CreateQuestionGroup">
+
+                        <h4>Skupina otázek</h4>
+
+                        <label>Jméno</label>
+                        <InputText class="form-control" @bind-Value="GroupModel.Name" />
+                        <br>
+
+                        <label>Body</label>
+                        <InputNumber min="0" class="form-control" @bind-Value="GroupModel.Score" />
+                        <br>
+
+                        <label>Počet otázek v jednom testu</label>
+                        <InputNumber class="form-control" min="1" max="@GroupModel.Questions.Count()" @bind-Value="GroupModel.Amount" />
+                        <br>
+
+                        <label><b>Jednotlivé otázky</b></label><br>
+
+                        @foreach (var question in GroupModel.Questions)
+                        {
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="container-fluid">
+                                        <label>Otázka @(GroupModel.Questions.IndexOf(question) + 1).</label><br>
+
+                                        <label>Text</label>
+                                        <InputTextArea class="form-control" @bind-Value="question.Text" />
+
+                                        <label>Typ odpovědi</label>
+                                        <select class="form-control" @bind="question.AnswerType">
+                                            @foreach (var answerType in AnswerTypes)
+                                            {
+
+                                                <option value="@answerType.Id">@answerType.Name</option>
+
+                                            }
+                                        </select><br>
+
+                                        <label>Obrázek</label>
+                                        <div class="row">
+                                            <div class="col-6" style="align-items: center; display: flex;">
+                                                <InputFile OnChange="@(f => HandleFileSelected(f, question))">Vybrat obrázek</InputFile>
+                                            </div>
+                                            <div class="col-6">
+                                                @if (question.Image != null)
+                                                {
+                                                    <img src="@question.Image" />
+                                                }
+                                            </div>
+                                        </div>
+                                        <br>
+                                        <a class="btn btn-danger" @onclick="() => DeleteQuestion(question)" @onclick:preventDefault>Smazat</a>
+                                        <br>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <br>
+                        <a class="btn btn-primary" @onclick="() => AddQuestion()" @onclick:preventDefault>Přidat otázku</a><br><br>
+                    </EditForm>
+                </div>
+                <div class="modal-footer">
+                    <button form="questionGroup" type="submit" class="btn btn-primary">Uložit skupinu otázek</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" @onclick="() => HideDetail()">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (IsLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="jumbotron">
+        <h1>Tvorba zkoušky</h1>
+        @if (Error != null)
+        {
+            <div class="alert alert-danger">@Error</div>
+        }
+        else if (Info != null)
+        {
+            <div class="alert alert-success">@Info</div>
+        }
+        <div class="col-md-8">
+            <EditForm id="assignmentform" Model="@AddAssignmentModel" OnSubmit="@CreateAssigment">
+                <div class="form-group">
+                    <label>Jméno</label>
+                    <InputText class="form-control" @bind-Value="AddAssignmentModel.Name" />
+                </div>
+
+                <div class="form-group">
+                    <label>Popis</label><br>
+                    <InputTextArea class="form-control" @bind-Value="AddAssignmentModel.Description" />
+                </div>
+
+                <div class="form-group">
+                    <label>Čas začátku testu</label>
+                    <InputText class="form-control" type="datetime-local" min="@actualTime" @bind-Value="AddAssignmentModel.Beginning" />
+                </div>
+
+                <div class="form-group">
+                    <label>Čas na vyplnění testu (minut)</label>
+                    <InputNumber class="form-control" min="1" @bind-Value="AddAssignmentModel.Duration" />
+                </div>
+            </EditForm>
+        </div>
+
+        <br>
+        <div>
+            <a class="btn btn-primary" href="" @onclick="() => ShowDetail()" @onclick:preventDefault>Přidat skupinu otázek</a>
+            <br>
+
+            @if (QuestionGroups.Count == 0)
+            {
+                <br>
+                <p>
+                    <b>Zatám není vytvořena žádná skupina otázek</b>
+                </p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>
+                                Jméno
+                            </th>
+                            <th>
+                                Body
+                            </th>
+                            <th>
+                                Celkem otázek ve skupině
+                            </th>
+                            <th>
+                                Otázek v testu
+                            </th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var questionGroup in QuestionGroups)
+                        {
+                        <tr>
+                            <td>
+                                @questionGroup.Name
+                            </td>
+                            <td>
+                                @questionGroup.Score
+                            </td>
+                            <td>
+                                @questionGroup.Question.Count
+                            </td>
+                            <td>
+                                @questionGroup.Amount
+                            </td>
+                            <td class="text-center">
+                                <a href="" @onclick="() => UpdateQuestionsGroup(questionGroup)" @onclick:preventDefault>Úprava</a>
+                                <a href="" @onclick="() => DeleteQuestionGroup(questionGroup)" @onclick:preventDefault>Smazat</a>
+                            </td>
+                        </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        <button type="submit" form="assignmentform" class="btn btn-success">Uložit zkoušku</button>
+    </div>
+}
+
+@code
+{
+  private GroupModel GroupModel { get; set; }
+  private AddAssignmentModel AddAssignmentModel = new AddAssignmentModel();
+
+  [Parameter]
+  public int AssignmentId { get; set; }
+
+  IList<QuestionGroup> QuestionGroups = new List<QuestionGroup>();
+  IList<AnswerType> AnswerTypes = new List<AnswerType>();
+  private string Error { get; set; }
+  private string Info { get; set; }
+  private string actualTime;
+  private bool IsLoading = true;
+
+  public string ModalDisplay = "none;";
+  public string ModalClass = "";
+  public QuestionGroup oldQuestionGroup;
+
+  protected override void OnInitialized()
+  {
+      AddAssignmentModel.Beginning = DateTime.Now.ToString("yyyy-MM-dd HH:mm").Replace(' ', 'T');
+      AddAssignmentModel.Duration = 1;
+      actualTime = AddAssignmentModel.Beginning;
+
+      base.OnInitialized();
+      IsLoading = false;
+  }
+
+  public void ShowDetail()
+  {
+      ModalDisplay = "block;";
+      ModalClass = "Show";
+      if (GroupModel is null)
+      {
+          GroupModel = new GroupModel();
+      }
+      StateHasChanged();
+  }
+
+  public void HideDetail()
+  {
+      ModalDisplay = "none";
+      ModalClass = "";
+      GroupModel = null;
+      StateHasChanged();
+  }
+
+  protected override async Task OnInitializedAsync()
+  {
+      await Task.Run(() => AnswerTypes = IisdbContext.AnswerType.ToList());
+  }
+
+  private void DeleteQuestionGroup(QuestionGroup questionGroup)
+  {
+      QuestionGroups.Remove(questionGroup);
+  }
+
+  private void UpdateQuestionsGroup(QuestionGroup questionGroup)
+  {
+      GroupModel = new GroupModel(questionGroup);
+
+      foreach (var question in QuestionGroups.FirstOrDefault(x => x.Name == questionGroup.Name).Question.ToArray())
+      {
+          GroupModel.Questions.Add(question);
+      }
+
+      ShowDetail();
+
+      oldQuestionGroup = questionGroup;
+  }
+
+  private void AddQuestion()
+  {
+      GroupModel.Questions.Add(new Question() { AnswerType = 1 });
+      GroupModel.Error = null;
+      StateHasChanged();
+  }
+
+  private void DeleteQuestion(Question question)
+  {
+      GroupModel.Error = null;
+      if (GroupModel.Questions.Count == 1)
+      {
+          GroupModel.Error = "Skupina musí obsahovat minimálně jednu otázku";
+          ScrollToModalTopAsync();
+      }
+      else
+      {
+          GroupModel.Questions.Remove(question);
+      }
+      StateHasChanged();
+  }
+
+  private void CreateQuestionGroup()
+  {
+      if (GroupModel.IsError())
+      {
+          ScrollToModalTopAsync();
+          return;
+      }
+
+      if (oldQuestionGroup != null)
+      {
+          QuestionGroups.Remove(oldQuestionGroup);
+          oldQuestionGroup = null;
+      }
+
+      var questionGroup = GroupModel.ToQuestionGroup();
+      QuestionGroups.Add(questionGroup);
+
+      HideDetail();
+  }
+
+  private void CreateAssigment()
+  {
+      if ((string.IsNullOrEmpty(AddAssignmentModel.Name)) || (QuestionGroups.Count == 0))
+      {
+          Error = "Informace nejsou správně vyplněny";
+          return;
+      }
+
+      if (IisdbContext.Assignment.FirstOrDefault(x => x.Name == AddAssignmentModel.Name) != null)
+      {
+          Error = "Jméno testu již bylo použito!";
+          return;
+      }
+
+      var assignment = AddAssignmentModel.ToAssignment(GetUserId());
+      IisdbContext.Assignment.Add(assignment);
+      IisdbContext.SaveChanges();
+
+      foreach (var questionGroup in QuestionGroups)
+      {
+          var questions = questionGroup.Question;
+          questionGroup.Question = null;
+
+          questionGroup.IdAssingment = assignment.Id;
+          IisdbContext.QuestionGroup.Add(questionGroup);
+          IisdbContext.SaveChanges();
+
+          foreach (var question in questions)
+          {
+              question.IdQuestionGroup = questionGroup.Id;
+              IisdbContext.Question.Add(question);
+          }
+
+          IisdbContext.SaveChanges();
+      }
+
+      AddAssignmentModel = new AddAssignmentModel();
+      QuestionGroups.Clear();
+
+      NavManager.NavigateTo("/ManageAssignments", true);
+  }
+
+  private int GetUserId()
+  {
+      var authState = AuthenticationStateProvider.GetAuthenticationStateAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+      var user = authState.User;
+
+      if (user.Identity.IsAuthenticated)
+      {
+          return int.Parse(user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value);
+      }
+
+      throw new Exception("Uživatel není přihlášený");
+  }
+
+  public async Task HandleFileSelected(IFileListEntry[] files, Question question)
+  {
+      var file = files?.FirstOrDefault();
+      if (GroupModel.IsError(file))
+      {
+          ScrollToModalTopAsync();
+          return;
+      }
+
+      question.Image = await file.ToImageStringAsync();
+  }
+
+  private void ScrollToModalTopAsync()
+  {
+      JS.InvokeVoidAsync("$('modalbox').scrollTop", 0).ConfigureAwait(false);
+  }
+}
+

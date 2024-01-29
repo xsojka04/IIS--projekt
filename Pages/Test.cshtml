@@ -1,0 +1,10 @@
+﻿@page
+@model IISprojekt3.Pages.TestModel
+@{
+    ViewData["Title"] = "Test";
+}
+
+<component type="typeof(IISprojekt3.Components.TestComponent)" param-TestId="Model.TestId" render-mode="Server" />
+@section Scripts {
+    <script src="~/_framework/blazor.server.js"></script>
+}

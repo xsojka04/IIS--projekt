@@ -1,0 +1,11 @@
+﻿@page
+@using IISprojekt3.Models.Enums;
+@model IISprojekt3.Pages.EvaluateTestModel
+@{
+    ViewData["Title"] = "Oprava testu";
+}
+<component type="typeof(IISprojekt3.Components.EvaluateTestComponent)" param-TestId="Model.TestId" render-mode="Server" />
+
+@section Scripts {
+    <script src="~/_framework/blazor.server.js"></script>
+}

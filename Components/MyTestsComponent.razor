@@ -1,0 +1,127 @@
+﻿@using IISprojekt3.Data.IisDbContext;
+@using IISprojekt3.Models.Enums;
+@using IISprojekt3.Helpers;
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IISprojekt3.Data.IisDbContext.IisdbContext IisdbContext
+
+<h1>Moje testy</h1>
+
+@if (IsLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    if (Tests.Count == 0)
+    {
+        <p>
+            <b>Seznam je prázdný</b>
+        </p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>
+                        Jméno
+                    </th>
+                    <th>
+                        Datum
+                    </th>
+                    <th>
+                        Stav
+                    </th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var test in Tests)
+                {
+                    <tr>
+                        <td>
+                            @test.IdAssignmentNavigation.Name
+                        </td>
+                        <td>
+                            @test.IdAssignmentNavigation.Beginning
+                        </td>
+                        <td>
+                            @(((ETestState)test.State).ToUserFriendlyString())
+                        </td>
+                        <td>
+                            <a href=@($"/TestDetail?TestId={test.Id}")>Detail</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+    @code {
+      private List<Test> Tests = new List<Test>();
+      private int UserId { get; set; }
+      private bool IsLoading = true;
+
+      protected override void OnInitialized()
+      {
+          UserId = GetUserId();
+      }
+
+      protected override async Task OnInitializedAsync()
+      {
+          await Task.Run(() => LoadTests());
+      }
+
+      private bool IsPastTest(Test test)
+      {
+          if (test.IdAssignmentNavigation.Beginning.AddMinutes(test.IdAssignmentNavigation.Duration) < DateTime.Now)
+              return true;
+          return false;
+      }
+
+      private void LoadTests()
+      {
+          var tests = IisdbContext.Test.Where(x => x.Author == UserId).ToList();
+          var assignments = IisdbContext.Assignment.ToList();
+
+          foreach (var test in tests)
+          {
+              test.IdAssignmentNavigation = assignments.FirstOrDefault(x => x.Id == test.IdAssignment);
+          }
+          foreach (var test in tests)
+          {
+              if (test.State == (int)ETestState.Schvaleno && IsPastTest(test))
+              {
+                  var editTest = IisdbContext.Test.FirstOrDefault(x => x.Id == test.Id);
+                  editTest.State = (int)ETestState.Vyplneno;
+                  IisdbContext.Test.Update(editTest);
+                  IisdbContext.SaveChanges();
+
+                  test.State = editTest.State;
+              }
+          }
+
+          Tests = tests;
+
+          IsLoading = false;
+      }
+
+      private int GetUserId()
+      {
+          var authState = AuthenticationStateProvider.GetAuthenticationStateAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+          var user = authState.User;
+
+          if (user.Identity.IsAuthenticated)
+          {
+              return int.Parse(user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value);
+          }
+          throw new Exception("Uživatel není přihlášený");
+      }
+    }

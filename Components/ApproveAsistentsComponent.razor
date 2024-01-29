@@ -1,0 +1,124 @@
+﻿@using IISprojekt3.Data.IisDbContext;
+@using IISprojekt3.Models.Enums;
+@using IISprojekt3.Helpers;
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IISprojekt3.Data.IisDbContext.IisdbContext IisdbContext
+
+<h1>Žádosti Asistentů</h1>
+
+@if (IsLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    if (Requests.Count == 0)
+    {
+        <p>
+            <b>Seznam je prázdný</b>
+        </p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>
+                        Jméno
+                    </th>
+                    <th>
+                        Datum
+                    </th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var request in Requests)
+                {
+                    <tr>
+                        <td>
+                            @request.IdAssignmentNavigation.Name
+                        </td>
+                        <td>
+                            @request.IdAsistentNavigation.Name
+                        </td>
+                        <td>
+                            <a href="" @onclick="() => Approve(request)" @onclick:preventDefault>Přijmout</a>
+                            <a href="" @onclick="() => Decline(request)" @onclick:preventDefault>Zamítnout</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+
+@code {
+  private List<BindAsistentAssignment> Requests = new List<BindAsistentAssignment>();
+  int userId = 0;
+  private bool IsLoading = true;
+
+  protected override async Task OnInitializedAsync()
+  {
+      await Task.Run(() => LoadRequestsAsync());
+  }
+
+  private async Task LoadRequestsAsync()
+  {
+      userId = await GetUserId();
+      var requests = IisdbContext.BindAsistentAssignment.Where(x => x.ApprovedBy == null).ToList();
+      var users = IisdbContext.User.ToList();
+      var assignments = IisdbContext.Assignment.ToList();
+
+      foreach (var request in requests)
+      {
+          request.IdAsistentNavigation = users.FirstOrDefault(x => x.Id == request.IdAsistent);
+          request.IdAssignmentNavigation = assignments.FirstOrDefault(x => x.Id == request.IdAssignment);
+
+          if (request.IdAssignmentNavigation.Author == userId)
+          {
+              Requests.Add(request);
+          }
+      }
+
+      IsLoading = false;
+  }
+
+  private async Task<int> GetUserId()
+  {
+      var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+      var user = authState.User;
+
+      if (user.Identity.IsAuthenticated)
+      {
+          return int.Parse(user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value);
+      }
+      throw new Exception("Uživatel není přihlášený");
+  }
+
+  private void Approve(BindAsistentAssignment request)
+  {
+      request.IsApproved = Convert.ToByte(true);
+      request.ApprovedBy = userId;
+      IisdbContext.BindAsistentAssignment.Update(request);
+      IisdbContext.SaveChanges();
+      NavManager.NavigateTo("/", true);
+  }
+
+  private void Decline(BindAsistentAssignment request)
+  {
+      request.IsApproved = Convert.ToByte(false);
+      request.ApprovedBy = userId;
+      IisdbContext.BindAsistentAssignment.Update(request);
+      IisdbContext.SaveChanges();
+      NavManager.NavigateTo("/", true);
+  }
+}
+

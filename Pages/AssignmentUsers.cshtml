@@ -1,0 +1,22 @@
+﻿@page
+@using IISprojekt3.Models.Enums;
+@model IISprojekt3.Pages.AssignmentUsersModel
+@{
+    ViewData["Title"] = "Uživatele přihlášení na zkoušku";
+}
+
+<h1>Uživatele přihlášení na zkoušku</h1>
+
+@if (User.IsInRole("ADMIN") || User.IsInRole("PROFESOR") || User.IsInRole("ASISTENT"))
+{
+    <component type="typeof(IISprojekt3.Components.TestStudentsComponent)" param-AssignmentId="Model.AssignmentId" render-mode="Server" />
+}
+
+@if (User.IsInRole("ADMIN") || User.IsInRole("PROFESOR"))
+{
+    <component type="typeof(IISprojekt3.Components.TestAsistentsComponent)" param-AssignmentId="Model.AssignmentId" render-mode="Server" />
+}
+
+@section Scripts {
+    <script src="~/_framework/blazor.server.js"></script>
+}

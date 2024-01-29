@@ -1,0 +1,17 @@
+﻿<ul class="navbar-nav">
+    @if (User.Identity.IsAuthenticated)
+    {
+        <li class="nav-item">
+            <a class="nav-link text-dark" asp-area="" asp-page="/Account" title="Manage">Uživatel: @User.Identity.Name</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark"  asp-area="" asp-page="/Logout">Odhlášení</a>
+        </li>
+    }
+    else
+    {
+        <li class="nav-item">
+            <a class="nav-link text-dark" asp-area="" asp-page="/Login">Přihlášení</a>
+        </li>
+    }
+</ul>

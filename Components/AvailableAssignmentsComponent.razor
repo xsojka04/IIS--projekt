@@ -1,0 +1,158 @@
+﻿@using IISprojekt3.Data.IisDbContext;
+@using IISprojekt3.Models.Enums;
+@using IISprojekt3.Helpers;
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IISprojekt3.Data.IisDbContext.IisdbContext IisdbContext
+
+@if (ModalData != null)
+{
+    <div class="modal @ModalClass" tabindex="-1" role="dialog" style="display:@ModalDisplay">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Detail testu</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close" @onclick="() => HideDetail()">
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p><b>Jméno:</b> @ModalData.Name</p>
+                    <p><b>Popis:</b> @ModalData.Description</p>
+                    <p><b>Začátek:</b> @ModalData.Beginning.ToString("yyyy-MM-dd HH:mm:ss")</p>
+                    <p><b>Trvání(min):</b> @ModalData.Duration</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" @onclick="() => RegisterTest(ModalData)">Přihlásit se</button>
+                    @if (user.UserTypeNavigation.Name != "STUDENT")
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="() => RegisterAsistentToAssignment(ModalData)">Přihlásit se jako asistent</button>
+                    }
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" @onclick="() => HideDetail()">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<h1>Dostupné testy</h1>
+
+@if (IsLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    if (AvailableAssignments.Count == 0)
+    {
+        <p>
+            <b>Seznam je prázdný</b>
+        </p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>
+                        Jméno
+                    </th>
+                    <th>
+                        Datum
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var assignment in AvailableAssignments)
+                {
+                    <tr @onclick="() => ShowDetail(assignment)">
+                        <td>
+                            @assignment.Name
+                        </td>
+                        <td>
+                            @assignment.Beginning.ToString("yyyy-MM-dd HH:mm:ss")
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+
+@code {
+    private List<Assignment> AvailableAssignments = new List<Assignment>();
+    public string ModalDisplay = "none;";
+    public string ModalClass = "";
+    public Assignment ModalData = null;
+    private bool IsLoading = true;
+    public User user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.Run(() => LoadAssignmentsAsync());
+    }
+
+
+    public void ShowDetail(Assignment assignment)
+    {
+        ModalDisplay = "block;";
+        ModalClass = "Show";
+        ModalData = assignment;
+        StateHasChanged();
+    }
+
+    public void HideDetail()
+    {
+        ModalDisplay = "none";
+        ModalClass = "";
+        ModalData = null;
+        StateHasChanged();
+    }
+
+    private async Task LoadAssignmentsAsync()
+    {
+        var userId = await GetUserId();
+        user = IisdbContext.User.FirstOrDefault(x => x.Id == userId);
+        user.UserTypeNavigation = IisdbContext.UserType.FirstOrDefault(x => x.Id == user.UserType);
+        var tests = IisdbContext.Test.Where(x => x.Author == userId).ToList();
+        var binded = IisdbContext.BindAsistentAssignment.Where(x => x.IdAsistent == userId).ToList();
+        var assignments = IisdbContext.Assignment.ToList();
+        AvailableAssignments = assignments.Where(x => !tests.Any(z => z.IdAssignment == x.Id) && !binded.Any(z => z.IdAssignment == x.Id)).ToList();
+        IsLoading = false;
+    }
+
+    private async Task<int> GetUserId()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity.IsAuthenticated)
+        {
+            return int.Parse(user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value);
+        }
+        throw new Exception("Uživatel není přihlášený");
+    }
+
+    private void RegisterTest(Assignment assignment)
+    {
+        var userId = GetUserId().ConfigureAwait(false).GetAwaiter().GetResult();
+        IisdbContext.Test.Add(new Test() { Author = userId, IdAssignment = assignment.Id, State = (int)ETestState.Zazadano });
+        IisdbContext.SaveChanges();
+        HideDetail();
+        NavManager.NavigateTo("/", true);
+    }
+
+    private void RegisterAsistentToAssignment(Assignment assignment)
+    {
+        var userId = GetUserId().ConfigureAwait(false).GetAwaiter().GetResult();
+        IisdbContext.BindAsistentAssignment.Add(new BindAsistentAssignment() { IdAssignment = assignment.Id, IdAsistent = userId, IsApproved = 0 });
+        IisdbContext.SaveChanges();
+        HideDetail();
+        NavManager.NavigateTo("/", true);
+    }
+}
